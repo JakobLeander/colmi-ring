@@ -10,12 +10,12 @@ import sys
 import asyncio
 
 sys.path.append("..")
-from colmi_ring.client import Client
+from colmi_ring.scanner import Scanner
 
 
 async def main():
-    client = Client()
-    await client.scan()
+    scanner = Scanner()
+    await scanner.scan()
 
 
 asyncio.run(main())

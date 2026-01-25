@@ -11,18 +11,10 @@ import logging
 import asyncio
 from bleak import BleakScanner
 
-
-SERVICE_ID = "6E40FFF0-B5A3-F393-E0A9-E50E24DCCA9E"
-REQUEST_ID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
-RESPONSE_ID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
-
 logger = logging.getLogger(__name__)
 
 
-class Client:
-    def __init__(self):
-        self.connected = False
-
+class Scanner:
     async def scan(self):
         """Scan for available Colmi Rings. Need to scan for 10 seconds to ensure it finds it."""
         found_devices = 0
@@ -34,4 +26,6 @@ class Client:
                 print(f"{d.name} - {d.address}")
 
         if found_devices == 0:
-            print("No Colmi ring found")
+            print(
+                "No Colmi ring found. Make sure ring is not connected to another device."
+            )
