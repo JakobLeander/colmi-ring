@@ -1,17 +1,18 @@
 # Colmi Ring Client
 
-A Python client library for interacting with Colmi Ring devices (specifically Colmi R12) over Bluetooth Low Energy (BLE).
+A Python client library for interacting with Colmi Ring R12 over Bluetooth Low Energy (BLE).
+
+Main focus for me is getting accelerometer data. You can find other libraries referenced below to extract fitness data.
 
 ## Overview
 
-This project provides a client library to communicate with Colmi Ring fitness trackers and collect sensor data via Bluetooth Low Energy (BLE). It enables you to connect to the ring, retrieve battery levels, and stream raw sensor data including accelerometer, heart rate (PPG), and blood oxygen (SpO₂) readings.
+This project provides a client library to communicate with Colmi R12 Ring fitness tracker and collect sensor data via Bluetooth Low Energy (BLE). It enables you to connect to the ring, retrieve battery levels, and stream raw sensor from accelerometer
 
 ## Features
 
 - **Battery Management**: Query battery level from the Colmi Ring
 - **Raw Sensor Streaming**: Enable/disable continuous streaming of sensor data
 - **Accelerometer Data**: Extract X, Y, Z axis acceleration values with proper two's complement handling
-- **Health Metrics**: Collect PPG (photoplethysmography) and SpO₂ (blood oxygen) data
 - **Async/Await Support**: Full async implementation using `bleak` and `asyncio`
 - **Proper Device Lifecycle**: Context manager support for clean connection handling
 
@@ -122,7 +123,7 @@ The ring transmits sensor data in the following formats:
 ## Important Notes
 
 - Device address format: `XX:XX:XX:XX:XX:XX` (MAC address)
-- The ring must be discovered and paired before connection
+- The ring cannot be paired to other devices or it cannot be discovered
 - Raw sensor streaming sends approximately 1 packet per second
 - Always use the `async with` context manager for proper connection lifecycle management
 
