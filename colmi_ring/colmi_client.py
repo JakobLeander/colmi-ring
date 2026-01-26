@@ -1,11 +1,13 @@
 # =============================================================================
 #  client.py
-#  Client library for Colmi Ring to interact with the device over Bluetooth.
+#  Client library for Colmi R12 ring to interact with the device over Bluetooth.
 #  Copyright (c) 2026 Jakob Leander
 #  Licensed under the MIT License.
 # Inspired by
 # - https://github.com/tahnok/colmi_r02_client/tree/main
 # - https://github.com/Puxtril/colmi-docs/tree/main
+# - https://github.com/CitizenOneX/colmi_r06_fbp/blob/main/lib/colmi_ring.dart
+# - https://github.com/edgeimpulse/example-data-collection-colmi-r02
 # =============================================================================
 import logging
 import asyncio
@@ -13,16 +15,32 @@ from bleak import BleakClient
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from types import TracebackType
 
-SERVICE_ID = "6E40FFF0-B5A3-F393-E0A9-E50E24DCCA9E"
-REQUEST_ID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
-RESPONSE_ID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+# UUIDs for MAIN and RXTX services and characteristics
+MAIN_SERVICE_UUID = "de5bf728-d711-4e47-af26-65e3012a5dc7"
+MAIN_WRITE_CHARACTERISTIC_UUID = "de5bf72a-d711-4e47-af26-65e3012a5dc7"
+MAIN_NOTIFY_CHARACTERISTIC_UUID = "de5bf729-d711-4e47-af26-65e3012a5dc7"
+RXTX_SERVICE_UUID = "6e40fff0-b5a3-f393-e0a9-e50e24dcca9e"
+RXTX_WRITE_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+RXTX_NOTIFY_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
-# Command codes
-CMD_BATTERY = 3
 
-COMMANDS = []
-COMMANDS.append(int(CMD_BATTERY))
+def create_command(hex_string):
+    bytes_array = [int(hex_string[i : i + 2], 16) for i in range(0, len(hex_string), 2)]
+    while len(bytes_array) < 15:
+        bytes_array.append(0)
+    checksum = sum(bytes_array) & 0xFF
+    bytes_array.append(checksum)
+    return bytes(bytes_array)
 
+
+# Commands
+CMD_BATTERY = create_command("03")
+SET_UNITS_METRICS = create_command("0a0200")
+
+# Ring will transmit data once per second after enabling raw sensor
+CMD_ENABLE_RAW_SENSOR = create_command("a104")
+# Disable raw sensor for my Colmi R12 is different from most documentation that claims this should be a102
+CMD_DISABLE_RAW_SENSOR = create_command("a105")
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +49,9 @@ class ColmiClient:
     def __init__(self, address: str):
         self.address = address
         self.bleak_client = BleakClient(self.address)
+        self.battery_queue = asyncio.Queue()
+
         logger.info(f"Created client for {self.address}")
-        self.queues: dict[int, asyncio.Queue] = {
-            cmd: asyncio.Queue() for cmd in COMMANDS
-        }
 
     async def __aenter__(self) -> "ColmiClient":
         logger.info(f"Connecting to {self.address}")
@@ -56,51 +73,81 @@ class ColmiClient:
     async def connect(self):
         await self.bleak_client.connect(timeout=30.0)
 
-        uart_service = self.bleak_client.services.get_service(SERVICE_ID)
-        assert uart_service
-        rx_char = uart_service.get_characteristic(REQUEST_ID)
-        assert rx_char
-        self.rx_char = rx_char
-
-        await self.bleak_client.start_notify(RESPONSE_ID, self._handle_tx)
+        await self.bleak_client.start_notify(
+            MAIN_NOTIFY_CHARACTERISTIC_UUID, self.handle_notification
+        )
+        await self.bleak_client.start_notify(
+            RXTX_NOTIFY_CHARACTERISTIC_UUID, self.handle_notification
+        )
+        await asyncio.sleep(2)  # Ensure notifications are set up
 
     async def disconnect(self):
         await self.bleak_client.disconnect()
 
-    def _handle_tx(self, _: BleakGATTCharacteristic, packet: bytearray) -> None:
-        """Bleak callback that handles new packets from the ring."""
+    async def send_data_array(self, command, service_name):
+        """Send data to RXTX or MAIN service's write characteristic."""
+        try:
+            if service_name == "MAIN":
+                await self.bleak_client.write_gatt_char(
+                    MAIN_WRITE_CHARACTERISTIC_UUID, command
+                )
+            elif service_name == "RXTX":
+                await self.bleak_client.write_gatt_char(
+                    RXTX_WRITE_CHARACTERISTIC_UUID, command
+                )
+        except Exception as e:
+            print(f"Failed to send data to {service_name} service: {e}")
 
+    def handle_notification(
+        self, _: BleakGATTCharacteristic, packet: bytearray
+    ) -> None:
+        """Bleak callback that handles new packets from the ring."""
         logger.info(f"Received packet {packet}")
         packet_type = packet[0]
+        packet_sub_type = packet[1]
 
-        logger.info(f"Packet Type {packet_type}")
+        logger.info(f"Packet: {packet_type} - {packet_sub_type}")
 
-        if packet_type in COMMANDS:
-            logger.info(f"write packet to queue")
-            self.queues[packet_type].put_nowait(packet)
+        if packet_type == 0x03:
+            battery_level = packet[1]
+            self.battery_queue.put_nowait(battery_level)
 
-    async def send_packet(self, packet: bytearray) -> None:
-        logger.debug(f"Sending packet: {packet}")
-        await self.bleak_client.write_gatt_char(self.rx_char, packet, response=False)
+        # get accelerometer values
+        if packet_type == 0xA1 and packet_sub_type == 0x03:
+            self.accX = (
+                ((packet[6] << 4) | (packet[7] & 0xF)) - (1 << 11)
+                if packet[6] & 0x8
+                else ((packet[6] << 4) | (packet[7] & 0xF))
+            )
+            self.accY = (
+                ((packet[2] << 4) | (packet[3] & 0xF)) - (1 << 11)
+                if packet[2] & 0x8
+                else ((packet[2] << 4) | (packet[3] & 0xF))
+            )
+            self.accZ = (
+                ((packet[4] << 4) | (packet[5] & 0xF)) - (1 << 11)
+                if packet[4] & 0x8
+                else ((packet[4] << 4) | (packet[5] & 0xF))
+            )
+            logger.info(
+                f"Accelerometer - X: {self.accX}, Y: {self.accY}, Z: {self.accZ}"
+            )
 
     async def get_battery_level(self) -> int:
         """Get the battery level from the Colmi Ring."""
-        packet = self.create_packet(CMD_BATTERY)
-        await self.send_packet(packet)
-        result_packet = await self.queues[CMD_BATTERY].get()
-        logger.debug(f"packet from queue: {result_packet}")
-        battery_level = result_packet[1]
+        await self.send_data_array(CMD_BATTERY, "RXTX")
+        battery_level = await self.battery_queue.get()
         logger.info(f"Battery level: {battery_level}%")
 
         return battery_level
 
-    @staticmethod
-    def create_packet(command: int) -> bytearray:
-        """Create a packet to send to the Colmi Ring."""
-        packet = bytearray(16)
-        packet[0] = command
+    async def start_streaming(self):
+        """Start streaming raw sensor data from the Colmi Ring."""
+        logger.info(f"Start Streaming Data")
+        await self.send_data_array(SET_UNITS_METRICS, "RXTX")
+        await self.send_data_array(CMD_ENABLE_RAW_SENSOR, "RXTX")
 
-        # Calculate checksum. Add all bytes modulo 255
-        packet[-1] = sum(packet) & 255
-
-        return packet
+    async def stop_streaming(self):
+        """Stop streaming raw sensor data from the Colmi Ring."""
+        logger.info(f"Stop Streaming Data")
+        await self.send_data_array(CMD_DISABLE_RAW_SENSOR, "RXTX")

@@ -1,21 +1,24 @@
 # Colmi Ring Client
 
-A Python client library for interacting with Colmi Ring devices over Bluetooth.
+A Python client library for interacting with Colmi Ring devices (specifically Colmi R12) over Bluetooth Low Energy (BLE).
 
 ## Overview
 
-This project provides a client library to communicate with Colmi Ring fitness trackers via Bluetooth Low Energy (BLE). It allows you to scan for devices, connect, and interact with the Colmi Ring hardware.
+This project provides a client library to communicate with Colmi Ring fitness trackers and collect sensor data via Bluetooth Low Energy (BLE). It enables you to connect to the ring, retrieve battery levels, and stream raw sensor data including accelerometer, heart rate (PPG), and blood oxygen (SpO₂) readings.
 
 ## Features
 
-- Bluetooth device scanning for Colmi Ring devices
-- BLE communication support
-- Device discovery and connection management
+- **Battery Management**: Query battery level from the Colmi Ring
+- **Raw Sensor Streaming**: Enable/disable continuous streaming of sensor data
+- **Accelerometer Data**: Extract X, Y, Z axis acceleration values with proper two's complement handling
+- **Health Metrics**: Collect PPG (photoplethysmography) and SpO₂ (blood oxygen) data
+- **Async/Await Support**: Full async implementation using `bleak` and `asyncio`
+- **Proper Device Lifecycle**: Context manager support for clean connection handling
 
 ## Requirements
 
 - Python 3.7+
-- bleak (Bluetooth Low Energy library)
+- `bleak` - Bluetooth Low Energy library for Python
 
 ## Installation
 
@@ -32,45 +35,104 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Scanning for Colmi Ring Devices
+### Getting Battery Level
 
 ```python
 import asyncio
-from colmi_ring.client import Client
+from colmi_ring.colmi_client import ColmiClient
 
 async def main():
-    client = Client()
-    await client.scan()
+    RING_ADDRESS = "32:31:47:36:08:07"  # Replace with your ring's address
+    client = ColmiClient(RING_ADDRESS)
+    
+    async with client:
+        battery_level = await client.get_battery_level()
+        print(f"Battery level: {battery_level}%")
 
 asyncio.run(main())
 ```
 
-This will scan for Colmi Ring devices (takes approximately 10 seconds) and display their names and MAC addresses.
+### Streaming Raw Sensor Data
+
+```python
+import asyncio
+from colmi_ring.colmi_client import ColmiClient
+
+async def main():
+    RING_ADDRESS = "32:31:47:36:08:07"  # Replace with your ring's address
+    client = ColmiClient(RING_ADDRESS)
+    
+    async with client:
+        await client.start_streaming()
+        await asyncio.sleep(5)  # Stream for 5 seconds
+        await client.stop_streaming()
+
+asyncio.run(main())
+```
 
 ## Project Structure
 
 ```
 colmi-ring/
-├── colmi_ring/          # Main client library
+├── colmi_ring/
 │   ├── __init__.py
-│   └── client.py        # BLE client implementation
-├── hardware_test/       # Hardware testing utilities
-│   └── scan_ring.py
-├── LICENSE              # MIT License
-└── requirements.txt     # Project dependencies
+│   ├── colmi_client.py        # Main ColmiClient class
+│   ├── scanner.py              # Device scanning utilities
+│   └── __pycache__/
+├── hardware_test/              # Hardware testing examples
+│   ├── get_battery.py          # Get battery level example
+│   ├── get_accelerometer.py    # Accelerometer data example
+│   └── scan_ring.py            # Device scanning example
+├── LICENSE                     # MIT License
+├── README.md                   # This file
+└── requirements.txt            # Python dependencies
 ```
 
 ## Bluetooth Service Details
 
+### MAIN Service
+- **Service UUID**: `DE5BF728-D711-4E47-AF26-65E3012A5DC7`
+- **Write Characteristic**: `DE5BF72A-D711-4E47-AF26-65E3012A5DC7`
+- **Notify Characteristic**: `DE5BF729-D711-4E47-AF26-65E3012A5DC7`
+
+### RXTX Service
 - **Service UUID**: `6E40FFF0-B5A3-F393-E0A9-E50E24DCCA9E`
-- **Request Characteristic**: `6E400002-B5A3-F393-E0A9-E50E24DCCA9E`
-- **Response Characteristic**: `6E400003-B5A3-F393-E0A9-E50E24DCCA9E`
+- **Write Characteristic**: `6E400002-B5A3-F393-E0A9-E50E24DCCA9E`
+- **Notify Characteristic**: `6E400003-B5A3-F393-E0A9-E50E24DCCA9E`
+
+## Commands
+
+- **Battery**: `0x03`
+- **Set Units (Metrics)**: `0x0A 0x02 0x00`
+- **Enable Raw Sensor**: `0xA1 0x04` (sends 1 packet per second)
+- **Disable Raw Sensor**: `0xA1 0x05`
+
+## Data Format
+
+The ring transmits sensor data in the following formats:
+
+### Accelerometer Data (0xA1 0x03)
+- Bytes 2-3: Y-axis (12-bit signed)
+- Bytes 4-5: Z-axis (12-bit signed)
+- Bytes 6-7: X-axis (12-bit signed)
+
+### Battery Data (0x03)
+- Byte 1: Battery percentage (0-100)
+
+## Important Notes
+
+- Device address format: `XX:XX:XX:XX:XX:XX` (MAC address)
+- The ring must be discovered and paired before connection
+- Raw sensor streaming sends approximately 1 packet per second
+- Always use the `async with` context manager for proper connection lifecycle management
 
 ## References
 
 This project is inspired by:
 - [colmi_r02_client](https://github.com/tahnok/colmi_r02_client)
 - [colmi-docs](https://github.com/Puxtril/colmi-docs)
+- [CitizenOneX/colmi_r06_fbp](https://github.com/CitizenOneX/colmi_r06_fbp/blob/main/lib/colmi_ring.dart)
+- [Edge Impulse Colmi R02 Example](https://github.com/edgeimpulse/example-data-collection-colmi-r02)
 
 ## License
 
