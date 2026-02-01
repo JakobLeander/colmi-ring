@@ -14,6 +14,7 @@ import asyncio
 from bleak import BleakClient
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from types import TracebackType
+import struct
 
 # UUIDs for MAIN and RXTX services and characteristics
 MAIN_SERVICE_UUID = "de5bf728-d711-4e47-af26-65e3012a5dc7"
@@ -31,6 +32,12 @@ def create_command(hex_string):
     checksum = sum(bytes_array) & 0xFF
     bytes_array.append(checksum)
     return bytes(bytes_array)
+
+
+# Other versions of this rings seems to use 12 bit format but looks like Colmi R12 uses 16 bit signed integers
+def decode_accelerometer(packet: bytes):
+    x, y, z = struct.unpack(">hhh", packet[2:8])
+    return x, y, z
 
 
 # Commands
@@ -114,21 +121,9 @@ class ColmiClient:
 
         # get accelerometer values
         if packet_type == 0xA1 and packet_sub_type == 0x03:
-            self.accX = (
-                ((packet[6] << 4) | (packet[7] & 0xF)) - (1 << 11)
-                if packet[6] & 0x8
-                else ((packet[6] << 4) | (packet[7] & 0xF))
-            )
-            self.accY = (
-                ((packet[2] << 4) | (packet[3] & 0xF)) - (1 << 11)
-                if packet[2] & 0x8
-                else ((packet[2] << 4) | (packet[3] & 0xF))
-            )
-            self.accZ = (
-                ((packet[4] << 4) | (packet[5] & 0xF)) - (1 << 11)
-                if packet[4] & 0x8
-                else ((packet[4] << 4) | (packet[5] & 0xF))
-            )
+            logger.info(f"Accelerometer packet: {packet}")
+            self.accX, self.accY, self.accZ = decode_accelerometer(packet)
+
             logger.info(
                 f"Accelerometer - X: {self.accX}, Y: {self.accY}, Z: {self.accZ}"
             )
