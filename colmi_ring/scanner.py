@@ -11,21 +11,13 @@ import logging
 import asyncio
 from bleak import BleakScanner
 
-logger = logging.getLogger(__name__)
+
+async def main():
+    """Scan for bluetooth devices. Need to scan for up to 30 seconds to ensure it finds ring."""
+    devices = await BleakScanner.discover(timeout=30.0)
+
+    for d in devices:
+        print(f"{d.name} - {d.address}")
 
 
-class Scanner:
-    async def scan(self):
-        """Scan for available Colmi Rings. Need to scan for 10 seconds to ensure it finds it."""
-        found_devices = 0
-        devices = await BleakScanner.discover(timeout=10.0)
-
-        for d in devices:
-            if d.name is not None and d.name.startswith("COLMI"):
-                found_devices += 1
-                print(f"{d.name} - {d.address}")
-
-        if found_devices == 0:
-            print(
-                "No Colmi ring found. Make sure ring is not connected to another device."
-            )
+asyncio.run(main())
