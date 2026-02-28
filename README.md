@@ -2,11 +2,11 @@
 
 A Python client library for interacting with Colmi Ring R12 over Bluetooth Low Energy (BLE).
 
-Main focus for me is getting accelerometer data. You can find other libraries referenced below to extract fitness data.
+Main focus for me is getting accelerometer data, but the library also supports basic battery and device management. Alongside the client, the repository contains utility scripts for scanning and simple hardware tests, making it easier to explore data from the ring. You can find other libraries referenced below to extract fitness data.
 
 ## Overview
 
-This project provides a client library to communicate with Colmi R12 Ring fitness tracker and collect sensor data via Bluetooth Low Energy (BLE). It enables you to connect to the ring, retrieve battery levels, and stream raw sensor from accelerometer
+This project provides a Python client library to communicate with Colmi R12 (and compatible R02/R06) ring fitness tracker and collect sensor data via Bluetooth Low Energy (BLE). In addition to the core `ColmiClient` class, the repo includes a standalone scanner tool (`colmi_ring/scanner.py`) and a handful of example scripts under `hardware_test/` for quick experiments. The library lets you connect to the ring, retrieve battery levels, stream raw accelerometer data, and manage the BLE connection lifecycle.
 
 ## Features
 
@@ -23,18 +23,36 @@ This project provides a client library to communicate with Colmi R12 Ring fitnes
 
 ## Installation
 
-1. Clone the repository:
+You can install the library directly from this repository or use it as a dependency in your own project.
+
 ```bash
+# clone the repo
 git clone https://github.com/yourusername/colmi-ring.git
 cd colmi-ring
-```
 
-2. Install dependencies:
-```bash
+# install into your active environment
 pip install -r requirements.txt
 ```
 
+The code requires Python 3.7+ and depends on `bleak` for BLE communication (version pinned in `requirements.txt`).
+
 ## Usage
+
+Before trying to connect you may want to scan for the MAC address of your ring. A simple scanner is provided:
+
+```bash
+python -m colmi_ring.scanner
+```
+
+or
+
+```bash
+python colmi_ring/scanner.py
+```
+
+It will perform a 30‑second BLE scan and print any discovered devices (the ring typically appears with a name like ``Colmi`` or ``R12``).
+
+Once you have the address you can use the client as shown below.
 
 ### Getting Battery Level
 
@@ -78,15 +96,14 @@ colmi-ring/
 ├── colmi_ring/
 │   ├── __init__.py
 │   ├── colmi_client.py        # Main ColmiClient class
-│   ├── scanner.py              # Device scanning utilities
-│   └── __pycache__/
-├── hardware_test/              # Hardware testing examples
-│   ├── get_battery.py          # Get battery level example
-│   ├── get_accelerometer.py    # Accelerometer data example
-│   └── scan_ring.py            # Device scanning example
-├── LICENSE                     # MIT License
-├── README.md                   # This file
-└── requirements.txt            # Python dependencies
+│   ├── scanner.py             # Device scanning utility
+├── hardware_test/             # Example scripts for quick testing
+│   ├── get_battery.py         # Battery level example
+│   ├── get_accelerometer.py   # Accelerometer data example
+│   └── scan_ring.py           # Scanning example (duplicate of scanner.py)
+├── LICENSE                    # MIT License
+├── README.md                  # Project documentation
+└── requirements.txt           # Python dependencies
 ```
 
 ## Bluetooth Service Details
@@ -113,9 +130,9 @@ colmi-ring/
 The ring transmits sensor data in the following formats:
 
 ### Accelerometer Data (0xA1 0x03)
-- Bytes 2-3: Y-axis (12-bit signed)
-- Bytes 4-5: Z-axis (12-bit signed)
-- Bytes 6-7: X-axis (12-bit signed)
+- Bytes 2-3: X-axis (16-bit little Endian)
+- Bytes 4-5: Y-axis (16-bit little Endian)
+- Bytes 6-7: Z-axis (16-bit little Endian)
 
 ### Battery Data (0x03)
 - Byte 1: Battery percentage (0-100)

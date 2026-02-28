@@ -109,11 +109,11 @@ class ColmiClient:
         self, _: BleakGATTCharacteristic, packet: bytearray
     ) -> None:
         """Bleak callback that handles new packets from the ring."""
-        logger.info(f"Received packet {packet}")
         packet_type = packet[0]
         packet_sub_type = packet[1]
 
-        logger.info(f"Packet: {packet_type} - {packet_sub_type}")
+        logger.info(f"Type: {packet_type} - {packet_sub_type}")
+        logger.info(f"Packet {packet}")
 
         if packet_type == 0x03:
             battery_level = packet[1]
