@@ -1,8 +1,11 @@
-# Colmi Ring Client
+# Controling a Robot with the Colmi Smart Ring
 
-A Python client library for interacting with Colmi Ring R12 over Bluetooth Low Energy (BLE).
+This is code and explanation of how to control a robot with a Colmi smart ring.
 
-Main focus for me is getting accelerometer data, but the library also supports basic battery and device management. Alongside the client, the repository contains utility scripts for scanning and simple hardware tests, making it easier to explore data from the ring. You can find other libraries referenced below to extract fitness data.
+You can find an instruction video on how everything works here: https://youtu.be/ZNC5xd7g6H0?si=TKa0M4gyZ1avuPhU
+
+![YouTube Thumbnail](media/YoutubeThumbnail.png)
+
 
 ## Overview
 
